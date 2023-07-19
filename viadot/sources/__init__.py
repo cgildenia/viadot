@@ -8,6 +8,8 @@ from .sharepoint import Sharepoint
 from .genesys import Genesys
 from .trino import Trino
 
+from .vidclub import Vidclub
+
 try:
     from .sap_rfc import SAPRFC
 except ImportError:
