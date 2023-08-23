@@ -66,20 +66,22 @@ class Vidclub(Source):
         self,
         from_date: str,
         to_date: str,
+        api_url: str,
         items_per_page: int,
         source: Literal["jobs", "product", "company", "survey"] = None,
-        region: Literal["bg", "hu", "hr", "pl", "ro", "si", "all"] = "all"
-    )->str:
+        region: Literal["bg", "hu", "hr", "pl", "ro", "si", "all"] = "all",
+    ) -> str:
         """
         Builds the query from the inputs.
 
         Args:
             from_date (str): Start date for the query.
-            to_date (str): End date for the query, if empty, datetime.today() will be used.
-            api_url (str): Generic part of the URL.
+            to_date (str): End date for the query, if empty, will be executed as datetime.today().strftime("%Y-%m-%d").
+            api_url (str): Generic part of the URL to Vid Club API.
             items_per_page (int): number of entries per page.
             source (Literal["jobs", "product", "company", "survey"], optional): The endpoint source to be accessed. Defaults to None.
             region (Literal["bg", "hu", "hr", "pl", "ro", "si", "all"], optional): Region filter for the query. Defaults to "all". [July 2023 status: parameter works only for 'all' on API]
+
         Returns:
             str: Final query with all filters added.
 
@@ -87,9 +89,9 @@ class Vidclub(Source):
             ValidationError: If any source different than the ones in the list are used.
         """
         if source in ["jobs", "product", "company"]:
-            url = f"{self.url}{source}?from={from_date}&to={to_date}&region={region}&limit={items_per_page}"
-        elif source in "survey":
-            url = f"{self.url}{source}?language=en&type=question"
+            url = f"{api_url}{source}?from={from_date}&to={to_date}&region={region}&limit={items_per_page}"
+        elif source == "survey":
+            url = f"{api_url}{source}?language=en&type=question"
         else:
             raise ValidationError(
                 "Pick one these sources: jobs, product, company, survey"
@@ -191,7 +193,7 @@ class Vidclub(Source):
         )
         headers = self.headers
         response = handle_api_response(
-            url=first_url, headers=headers, method="GET", verify=False
+            url=first_url, headers=headers, method="GET"
         )
         response = response.json()
 
@@ -263,7 +265,7 @@ class Vidclub(Source):
                     page += 1
                     url = f"{first_url}&page={page}"
                 r = handle_api_response(
-                    url=url, headers=headers, method="GET", verify=False
+                    url=url, headers=headers, method="GET"
                 )
                 response = r.json()
                 df_page = pd.DataFrame(response["data"])
