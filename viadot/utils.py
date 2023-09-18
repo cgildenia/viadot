@@ -484,3 +484,82 @@ def add_viadot_metadata_columns(func: Callable) -> Callable:
 
 def get_fqn(table_name: str, schema_name: str = None) -> str:
     return f"{schema_name}.{table_name}" if schema_name else table_name
+
+
+def get_flow_status(
+    path: str,
+    credentials_secret: str = None,
+    config_key: str = None,
+    credentials: dict = None,
+) -> pd.DataFrame:
+    
+    ## download from ADLS
+    
+    ## read from local
+    try:
+        flow_status = pd.read_csv(path)
+    except:
+        return pd.DataFrame()
+    
+    return flow_status
+
+
+def tolerance_check(
+    data: pd.DataFrame,
+    flow_status: pd.DataFrame = None,
+    time_window: int = 7,
+    tolerance: float  = 0.1,  
+) -> bool:
+    
+    if flow_status.shape[0] < time_window:
+        ## not enough data to check?
+        return False
+    else:
+        historic_size = flow_status['Rows'].sum() / time_window
+        current_size = data.shape[0]
+        if (current_size < (historic_size - historic_size*tolerance)) or (current_size > (historic_size + historic_size*tolerance)):
+            ## Raise flag for out of window warning
+            return True
+    
+    return False
+
+def update_flow_status(
+    data: pd.DataFrame,
+    path: str,
+    time_window: int = 7,
+    flow_status: pd.DataFrame = None,
+    credentials_secret: str = None,
+    config_key: str = None,
+    credentials: dict = None,
+):
+    
+    if flow_status == None:
+        flow_status = get_flow_status(path)
+        
+    current_size = data.shape[0]
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    
+    data_dict = {'Rows':current_size, 'Date': timestamp}
+    
+    data_series = pd.Series(data_dict)
+    
+    nan_count = data.isna().sum()
+    new_index = []
+    for i in nan_count.index:
+        new_index.append(i + ' NaNs')
+        
+    nan_count.index = new_index
+    
+    status_series = pd.concat([data_series, nan_count])
+    
+    current_status_df = pd.DataFrame.from_dict(status_series, orient='columns').T
+    
+    new_flow_status = flow_status.append(current_status_df, ignore_index=True)
+    
+    if flow_status.shape[0] > time_window:
+        new_flow_status = new_flow_status.iloc[1:, :]
+    
+    ##upload to adls
+    new_flow_status.to_csv(path, mode='w+', index=False)
+        
+    return
