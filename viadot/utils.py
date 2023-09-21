@@ -488,16 +488,21 @@ def get_fqn(table_name: str, schema_name: str = None) -> str:
 
 def get_flow_status(
     path: str,
-    credentials_secret: str = None,
-    config_key: str = None,
-    credentials: dict = None,
 ) -> pd.DataFrame:
-    
-    ## download from ADLS
+    """
+    Tries to read the flow status file from the given path. 
+    If there is no file returns an empty DataFrame to populate.
+
+    Args:
+        path (str): Path to the flow status parquet file
+
+    Returns:
+        pd.DataFrame: Either a df with the flow status info, or an empty df to populate.
+    """
     
     ## read from local
     try:
-        flow_status = pd.read_csv(path)
+        flow_status = pd.read_parquet(path)
     except:
         return pd.DataFrame()
     
@@ -508,30 +513,59 @@ def tolerance_check(
     data: pd.DataFrame,
     flow_status: pd.DataFrame = None,
     time_window: int = 7,
-    tolerance: float  = 0.1,  
+    tolerance: float  = 10,  
 ) -> bool:
+    """
+    Checks if the size of the given dataframe is within the expected values according to a tolerance value.
+    If the size is out of the tolerance window, the code returns True.
+
+    Args:
+        data (pd.DataFrame): Extracted data in df form
+        flow_status (pd.DataFrame, optional): Flow status dataframe. Defaults to None.
+        time_window (int, optional): The amount of rows to use from the flow status dataframe. Defaults to 7.
+        tolerance (float, optional): Percentage of deviation from the mean size allowed. Defaults to 10.
+
+    Returns:
+        bool: Whether the data size is within the tolerance window. True if the size is valid.
+        str: Message explaining the result.
+    """
+    
     
     if flow_status.shape[0] < time_window:
+        if data.shape[0] == 0:
+            ## empty extract dataframe
+            return (False, 'The dataframe is empty.')
         ## not enough data to check?
-        return False
+        return (True, time_window - flow_status.shape[0] + ' extracts needed for a full window.')
     else:
         historic_size = flow_status['Rows'].sum() / time_window
+        
+        tolerance = tolerance / 100
+        
         current_size = data.shape[0]
         if (current_size < (historic_size - historic_size*tolerance)) or (current_size > (historic_size + historic_size*tolerance)):
             ## Raise flag for out of window warning
-            return True
+            return (False, 'Size of the extract is out of the tolerance window.')
     
-    return False
+    return (True, 'Size of the extract within the expected range.')
 
 def update_flow_status(
     data: pd.DataFrame,
     path: str,
     time_window: int = 7,
     flow_status: pd.DataFrame = None,
-    credentials_secret: str = None,
-    config_key: str = None,
-    credentials: dict = None,
 ):
+    """
+    Updates the flow status dataframe with the new input, until the dataframe has a size equal to the time window.
+    If there number of rows is higher than the window, removes the oldest record.
+    Finally, saves everything to a parquet file.
+
+    Args:
+        data (pd.DataFrame): Extracted data from the last call to the flow.
+        path (str): Path to the flow status parquet file
+        time_window (int, optional): The maximun amount of rows the flow status table will have. Defaults to 7.
+        flow_status (pd.DataFrame, optional): The flow status table to update. Defaults to None.
+    """
     
     if flow_status == None:
         flow_status = get_flow_status(path)
@@ -559,7 +593,6 @@ def update_flow_status(
     if flow_status.shape[0] > time_window:
         new_flow_status = new_flow_status.iloc[1:, :]
     
-    ##upload to adls
-    new_flow_status.to_csv(path, mode='w+', index=False)
+    new_flow_status.to_parquet(path, index=False)
         
     return
