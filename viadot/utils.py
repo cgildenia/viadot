@@ -559,6 +559,7 @@ def update_flow_status(
     Updates the flow status dataframe with the new input, until the dataframe has a size equal to the time window.
     If there number of rows is higher than the window, removes the oldest record.
     Finally, saves everything to a parquet file.
+    The structure for the flow status dataframe is: the size of the extract, a timestamp, and a count per column in the extract of the NaN values present.
 
     Args:
         data (pd.DataFrame): Extracted data from the last call to the flow.
